@@ -30,13 +30,14 @@ class KieAIError(Exception):
 
 
 class KieAI:
-    def __init__(self, api_key: str | None = None):
+    def __init__(self, api_key: str | None = None, model: str = "nano-banana-2"):
         self.api_key = api_key or os.getenv("KIE_AI_API_KEY")
         if not self.api_key:
             raise KieAIError(
                 "KIE_AI_API_KEY not set. Get your key at https://kie.ai/api-key "
                 "and add it to .env"
             )
+        self.model = model
         self.headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
@@ -49,19 +50,25 @@ class KieAI:
         resolution: str = "1K",
         output_format: str = "png",
         image_input: list[str] | None = None,
+        model: str | None = None,
     ) -> str:
         """Create image generation task. Returns task ID."""
+        active_model = model or self.model
+        input_params = {
+            "prompt": prompt,
+            "aspect_ratio": aspect_ratio,
+            "resolution": resolution,
+        }
+        if active_model == "nano-banana-2":
+            input_params["output_format"] = output_format
         payload = {
-            "model": "nano-banana-2",
-            "input": {
-                "prompt": prompt,
-                "aspect_ratio": aspect_ratio,
-                "resolution": resolution,
-                "output_format": output_format,
-            },
+            "model": active_model,
+            "input": input_params,
         }
         if image_input:
-            payload["input"]["image_input"] = image_input
+            # gpt-image-2-image-to-image uses "input_urls"; all others use "image_input"
+            key = "input_urls" if active_model == "gpt-image-2-image-to-image" else "image_input"
+            payload["input"][key] = image_input
 
         for attempt in range(5):
             try:
@@ -133,6 +140,7 @@ class KieAI:
         resolution: str = "1K",
         output_format: str = "png",
         image_input: list[str] | None = None,
+        model: str | None = None,
     ) -> list[str]:
         """Generate image and wait for result. Returns list of image URLs."""
         task_id = self.create_task(
@@ -141,6 +149,7 @@ class KieAI:
             resolution=resolution,
             output_format=output_format,
             image_input=image_input,
+            model=model,
         )
         print(f"  Task created: {task_id}")
         return self.wait_for_result(task_id)
