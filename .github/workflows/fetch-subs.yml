@@ -1,6 +1,11 @@
 name: fetch-subs
 
 on:
+  push:
+    branches:
+      - claude/live-subtitles-english-film-4kuuim
+    paths:
+      - '.github/workflows/fetch-subs.yml'
   workflow_dispatch:
 
 permissions:
