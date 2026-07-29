@@ -1,0 +1,59 @@
+name: fetch-subs
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch Russian subtitles for The Odyssey (2026)
+        run: |
+          set -x
+          mkdir -p subs
+          UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
+          found=""
+
+          for page in \
+            "https://www.subtitlecat.com/subs/1590/The.Odyssey.2026.1080p.CAM.x264-OnlyFlix.en2.html" \
+            "https://www.subtitlecat.com/subs/1591/The%20Odyssey%20(2026)%20-%20YTS%20TV.html"
+          do
+            curl -sL --max-time 60 -A "$UA" "$page" -o /tmp/page.html || continue
+            grep -oE 'href="[^"]+\.srt"' /tmp/page.html | sort -u > subs/debug-links.txt || true
+            grep -iE 'russian|русск' /tmp/page.html | head -20 >> subs/debug-links.txt || true
+            ru=$(grep -oE 'href="[^"]+[-._]ru\.srt"' /tmp/page.html | head -1 | sed 's/^href="//;s/"$//')
+            if [ -n "$ru" ]; then
+              case "$ru" in
+                http*) url="$ru" ;;
+                /*)    url="https://www.subtitlecat.com$ru" ;;
+                *)     url="$(dirname "$page")/$ru" ;;
+              esac
+              curl -sL --max-time 60 -A "$UA" "$url" -o subs/odyssey.ru.srt
+              if grep -q -- '-->' subs/odyssey.ru.srt; then
+                found="yes"
+                break
+              fi
+            fi
+          done
+
+          if [ -z "$found" ]; then
+            echo "No Russian srt found on subtitlecat; trying subsource API" >> subs/debug-links.txt
+            curl -sL --max-time 60 -A "$UA" -X POST "https://api.subsource.net/api/searchMovie" \
+              -H "Content-Type: application/json" \
+              -d '{"query":"the odyssey 2026"}' -o subs/subsource-search.json || true
+          fi
+
+          ls -la subs/
+
+      - name: Commit results
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add subs/
+          git commit -m "Add fetched subtitle files" || echo "nothing to commit"
+          git push
