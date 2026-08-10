@@ -1,0 +1,106 @@
+<title>כתוביות לייב — נגן כתוביות לקולנוע</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<style>
+  /* Cinema tool: deliberately single dark theme — it is used in a dark hall. */
+  :root {
+    --bg: #050507;
+    --surface: #15161c;
+    --surface-2: #1f2129;
+    --text: #ffffff;
+    --dim: #8b8fa0;
+    --accent: #e8b44a;
+    --accent-ink: #1a1405;
+  }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    -webkit-text-size-adjust: 100%;
+    overscroll-behavior: none;
+  }
+  #root { height: 100dvh; display: flex; flex-direction: column; }
+
+  /* ---- setup ---- */
+  .setup { min-height: 100dvh; display: flex; align-items: center; justify-content: center; padding: 24px; box-sizing: border-box; }
+  .setup-inner { width: 100%; max-width: 420px; display: flex; flex-direction: column; gap: 14px; }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 14px var(--accent); flex: none; }
+  .brand h1 { font-size: 26px; margin: 0; letter-spacing: -0.02em; }
+  .tagline { color: var(--dim); margin: 0 0 8px; line-height: 1.55; font-size: 15px; }
+  .hint { background: var(--surface); border-radius: 10px; padding: 14px 16px; color: var(--dim); font-size: 13.5px; line-height: 1.6; margin-top: 6px; }
+  .hint strong { color: var(--text); font-weight: 600; }
+
+  /* ---- buttons ---- */
+  .btn {
+    appearance: none; border: 1px solid var(--surface-2); background: var(--surface);
+    color: var(--text); border-radius: 12px; padding: 12px 16px; font-size: 15px;
+    font-family: inherit; cursor: pointer; touch-action: manipulation; user-select: none;
+  }
+  .btn:active { background: var(--surface-2); }
+  .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 700; }
+  .btn.primary:active { filter: brightness(0.9); }
+  .btn.big { padding: 16px; font-size: 17px; text-align: center; }
+  .btn.ghost { background: transparent; color: var(--dim); }
+  .btn.small { padding: 8px 12px; font-size: 13px; }
+  .file-btn { position: relative; display: block; }
+  .file-btn input { position: absolute; inset: 0; opacity: 0; width: 100%; cursor: pointer; }
+  .paste-box { display: flex; flex-direction: column; gap: 10px; }
+  .paste-box textarea {
+    width: 100%; box-sizing: border-box; height: 140px; background: var(--surface);
+    color: var(--text); border: 1px solid var(--surface-2); border-radius: 10px;
+    padding: 12px; font-size: 13px; font-family: ui-monospace, Menlo, Consolas, monospace; resize: vertical;
+  }
+
+  /* ---- player ---- */
+  .player { display: flex; flex-direction: column; height: 100dvh; }
+  .stage { flex: 1; display: flex; align-items: center; justify-content: center; padding: 20px; cursor: pointer; min-height: 0; }
+  .cue { text-align: center; font-weight: 700; line-height: 1.35; max-width: 92vw; text-wrap: balance; text-shadow: 0 2px 12px rgba(0,0,0,0.9); }
+  .cue.idle { color: var(--dim); font-weight: 400; }
+
+  .controls {
+    flex: none; background: var(--surface); border-top: 1px solid var(--surface-2);
+    padding: 12px 14px calc(12px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 10px;
+  }
+  .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .clock-row { justify-content: space-between; }
+  .btn.play { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 700; font-size: 17px; padding: 12px 22px; border-radius: 12px; }
+  .clock { font-variant-numeric: tabular-nums; font-size: 24px; letter-spacing: 0.03em; direction: ltr; }
+  .lbl { color: var(--dim); font-size: 12.5px; min-width: 58px; }
+  .btn.nudge { padding: 10px 12px; font-size: 14px; font-variant-numeric: tabular-nums; }
+  .sync-hint { color: var(--dim); font-size: 12px; margin-top: -4px; }
+  .jump {
+    width: 64px; background: var(--surface-2); color: var(--text); border: 1px solid var(--surface-2);
+    border-radius: 10px; padding: 10px 8px; font-size: 15px; text-align: center; font-family: inherit;
+  }
+  .jump:focus-visible { outline: 2px solid var(--accent); }
+  .spacer { flex: 1; }
+  .foot { color: var(--dim); font-size: 11.5px; text-align: center; }
+  .btn.wide { flex: 1; text-align: center; }
+
+  /* ---- scroll-to-sync cue list ---- */
+  .cuelist {
+    position: fixed; inset: 0; z-index: 20; background: var(--bg);
+    display: flex; flex-direction: column;
+  }
+  .cuelist-head {
+    flex: none; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 12px 14px; background: var(--surface); border-bottom: 1px solid var(--surface-2);
+    color: var(--dim); font-size: 13px;
+  }
+  .cuelist-scroll { flex: 1; overflow-y: auto; overscroll-behavior: contain; }
+  .cuerow {
+    appearance: none; display: flex; align-items: baseline; gap: 12px; width: 100%;
+    background: none; border: none; border-bottom: 1px solid var(--surface);
+    color: var(--text); padding: 12px 14px; font-size: 16px; font-family: inherit;
+    text-align: start; cursor: pointer;
+  }
+  .cuerow:active { background: var(--surface); }
+  .cuerow.on { border-inline-start: 3px solid var(--accent); background: var(--surface); }
+  .cuetime { flex: none; color: var(--dim); font-size: 12px; font-variant-numeric: tabular-nums; direction: ltr; }
+  .cuetext { flex: 1; line-height: 1.4; }
+</style>
+<div id="root"></div>
+<script>__BUNDLE__</script>

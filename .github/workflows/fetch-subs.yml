@@ -12,85 +12,59 @@ permissions:
   contents: write
 
 jobs:
-  fetch:
+  scan-native-russian:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Fetch English source subtitles for Spider-Man Brand New Day (2026)
+      - name: Scan for professionally-made Russian subtitles (Spider-Man Brand New Day 2026)
         run: |
           set -x
           mkdir -p subs
           UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
-          # list real srt files on the page the working -ru file came from
-          curl -sL --max-time 60 -A "$UA" "https://www.subtitlecat.com/subs/1614/Spider-Man.Brand.New.Day.2026.1080p.CAM.H264-OnlyFlix.html" -o /tmp/enpage.html || true
-          grep -oE 'href="[^"]+\.srt"' /tmp/enpage.html | sort -u > subs/spiderman-en-links.txt || true
-
-          candidates=$(grep -oE '/subs/[^"]+\.srt' /tmp/enpage.html | grep -Ei 'en\.srt|OnlyFlix\.srt' | sort -u)
-          candidates="$candidates /subs/1614/Spider-Man.Brand.New.Day.2026.1080p.CAM.H264-OnlyFlix.srt"
-          for path in $candidates; do
-            curl -sL --max-time 60 -A "$UA" "https://www.subtitlecat.com$path" -o /tmp/en.srt
-            if grep -q -- '-->' /tmp/en.srt && ! grep -qi '<html' /tmp/en.srt; then
-              cp /tmp/en.srt subs/spiderman.en.srt
-              echo "english source: https://www.subtitlecat.com$path" >> subs/spiderman.source.txt
-              break
-            fi
-          done
-          : > subs/spiderman-debug.txt
+          : > subs/native-scan.log
+          echo "scan at $(date -u +%FT%TZ)" >> subs/native-scan.log
           found=""
 
-          # --- 1) SubDL: look for a native Russian upload ---
+          # --- SubDL: russian page lists uploaded (non-auto) subs with dl.subdl.com zip links ---
           if curl -sL --max-time 60 -A "$UA" "https://subdl.com/subtitle/sd12717112/spider-man-brand-new-day/russian" -o /tmp/subdl.html; then
-            echo "== subdl russian page fetched, bytes: $(wc -c < /tmp/subdl.html)" >> subs/spiderman-debug.txt
-            grep -oE '"(https://dl\.subdl\.com/subtitle/[^"]+)"' /tmp/subdl.html | head -5 >> subs/spiderman-debug.txt || true
-            dl=$(grep -oE 'https://dl\.subdl\.com/subtitle/[^"]+' /tmp/subdl.html | head -1)
-            if [ -n "$dl" ]; then
-              curl -sL --max-time 60 -A "$UA" "$dl" -o /tmp/subdl.zip
-              if unzip -o /tmp/subdl.zip -d /tmp/subdl_out >> subs/spiderman-debug.txt 2>&1; then
-                srt=$(find /tmp/subdl_out -iname '*.srt' | head -1)
-                if [ -n "$srt" ] && grep -q -- '-->' "$srt"; then
-                  cp "$srt" subs/spiderman.ru.srt
-                  echo "source: subdl (native Russian upload): $dl" > subs/spiderman.source.txt
+            grep -oE 'https://dl\.subdl\.com/subtitle/[^"]+' /tmp/subdl.html | sort -u | tee -a subs/native-scan.log | head -3 > /tmp/subdl_links.txt
+            while read -r dl; do
+              [ -z "$dl" ] && continue
+              curl -sL --max-time 60 -A "$UA" "$dl" -o /tmp/cand.zip || continue
+              rm -rf /tmp/cand_out; mkdir -p /tmp/cand_out
+              unzip -o /tmp/cand.zip -d /tmp/cand_out >> subs/native-scan.log 2>&1 || continue
+              srt=$(find /tmp/cand_out -iname '*.srt' | head -1)
+              if [ -n "$srt" ] && grep -q -- '-->' "$srt" && grep -qP '[а-яА-Я]' "$srt"; then
+                cp "$srt" subs/spiderman.native.ru.srt
+                echo "CANDIDATE from subdl: $dl" >> subs/native-scan.log
+                found="yes"; break
+              fi
+            done < /tmp/subdl_links.txt
+          fi
+
+          # --- Podnapisi: plain-HTML search, /subtitles/<slug>/download links ---
+          if [ -z "$found" ]; then
+            curl -sL --max-time 60 -A "$UA" "https://www.podnapisi.net/subtitles/search/?keywords=spider-man%20brand%20new%20day&language=ru" -o /tmp/pod.html || true
+            grep -oE 'href="/subtitles/[^"]+"' /tmp/pod.html | sort -u | head -10 >> subs/native-scan.log || true
+            slug=$(grep -oE 'href="/subtitles/ru-[^"]+"' /tmp/pod.html | head -1 | sed 's/^href="//;s/"$//')
+            if [ -n "$slug" ]; then
+              curl -sL --max-time 60 -A "$UA" "https://www.podnapisi.net${slug}/download" -o /tmp/cand.zip
+              rm -rf /tmp/cand_out; mkdir -p /tmp/cand_out
+              if unzip -o /tmp/cand.zip -d /tmp/cand_out >> subs/native-scan.log 2>&1; then
+                srt=$(find /tmp/cand_out -iname '*.srt' | head -1)
+                if [ -n "$srt" ] && grep -q -- '-->' "$srt" && grep -qP '[а-яА-Я]' "$srt"; then
+                  cp "$srt" subs/spiderman.native.ru.srt
+                  echo "CANDIDATE from podnapisi: $slug" >> subs/native-scan.log
                   found="yes"
                 fi
               fi
             fi
-          else
-            echo "subdl fetch failed" >> subs/spiderman-debug.txt
           fi
 
-          # --- 2) SubSource: native Russian ---
           if [ -z "$found" ]; then
-            curl -sL --max-time 60 -A "$UA" "https://subsource.net/subtitles/spider-man-brand-new-day-2026/russian" -o /tmp/subsource.html || true
-            echo "== subsource bytes: $(wc -c < /tmp/subsource.html 2>/dev/null || echo 0)" >> subs/spiderman-debug.txt
-            grep -oE 'href="[^"]*russian[^"]*"' /tmp/subsource.html | head -10 >> subs/spiderman-debug.txt || true
+            echo "no native russian candidate found this scan" >> subs/native-scan.log
           fi
-
-          # --- 3) subtitlecat fallback (auto-translated, proven to work) ---
-          if [ -z "$found" ]; then
-            for page in \
-              "https://www.subtitlecat.com/subs/1612/Spider-Man.Brand.New.Day.2026.1080p.CAM.H264-OnlyFlix.html" \
-              "https://www.subtitlecat.com/subs/1612/Spider-Man.Brand.New.Day.2026.html"
-            do
-              curl -sL --max-time 60 -A "$UA" "$page" -o /tmp/cat.html || continue
-              grep -oE 'href="[^"]+\.srt"' /tmp/cat.html | sort -u >> subs/spiderman-debug.txt || true
-              ru=$(grep -oE 'href="[^"]+[-._]ru\.srt"' /tmp/cat.html | head -1 | sed 's/^href="//;s/"$//')
-              if [ -n "$ru" ]; then
-                case "$ru" in
-                  http*) url="$ru" ;;
-                  /*)    url="https://www.subtitlecat.com$ru" ;;
-                  *)     url="$(dirname "$page")/$ru" ;;
-                esac
-                curl -sL --max-time 60 -A "$UA" "$url" -o subs/spiderman.ru.srt
-                if grep -q -- '-->' subs/spiderman.ru.srt; then
-                  echo "source: subtitlecat (machine translated): $url" > subs/spiderman.source.txt
-                  found="yes"
-                  break
-                fi
-              fi
-            done
-          fi
-
           ls -la subs/
 
       - name: Commit results
@@ -98,5 +72,5 @@ jobs:
           git config user.name "github-actions"
           git config user.email "actions@github.com"
           git add subs/
-          git commit -m "Add fetched subtitle files" || echo "nothing to commit"
+          git commit -m "Daily scan for native Russian Spider-Man subtitles" || echo "nothing to commit"
           git push
