@@ -17,40 +17,64 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Fetch Russian subtitles for The Odyssey (2026)
+      - name: Fetch Russian subtitles for Spider-Man Brand New Day (2026)
         run: |
           set -x
           mkdir -p subs
           UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
+          : > subs/spiderman-debug.txt
           found=""
 
-          for page in \
-            "https://www.subtitlecat.com/subs/1590/The.Odyssey.2026.1080p.CAM.x264-OnlyFlix.en2.html" \
-            "https://www.subtitlecat.com/subs/1591/The%20Odyssey%20(2026)%20-%20YTS%20TV.html"
-          do
-            curl -sL --max-time 60 -A "$UA" "$page" -o /tmp/page.html || continue
-            grep -oE 'href="[^"]+\.srt"' /tmp/page.html | sort -u > subs/debug-links.txt || true
-            grep -iE 'russian|русск' /tmp/page.html | head -20 >> subs/debug-links.txt || true
-            ru=$(grep -oE 'href="[^"]+[-._]ru\.srt"' /tmp/page.html | head -1 | sed 's/^href="//;s/"$//')
-            if [ -n "$ru" ]; then
-              case "$ru" in
-                http*) url="$ru" ;;
-                /*)    url="https://www.subtitlecat.com$ru" ;;
-                *)     url="$(dirname "$page")/$ru" ;;
-              esac
-              curl -sL --max-time 60 -A "$UA" "$url" -o subs/odyssey.ru.srt
-              if grep -q -- '-->' subs/odyssey.ru.srt; then
-                found="yes"
-                break
+          # --- 1) SubDL: look for a native Russian upload ---
+          if curl -sL --max-time 60 -A "$UA" "https://subdl.com/subtitle/sd12717112/spider-man-brand-new-day/russian" -o /tmp/subdl.html; then
+            echo "== subdl russian page fetched, bytes: $(wc -c < /tmp/subdl.html)" >> subs/spiderman-debug.txt
+            grep -oE '"(https://dl\.subdl\.com/subtitle/[^"]+)"' /tmp/subdl.html | head -5 >> subs/spiderman-debug.txt || true
+            dl=$(grep -oE 'https://dl\.subdl\.com/subtitle/[^"]+' /tmp/subdl.html | head -1)
+            if [ -n "$dl" ]; then
+              curl -sL --max-time 60 -A "$UA" "$dl" -o /tmp/subdl.zip
+              if unzip -o /tmp/subdl.zip -d /tmp/subdl_out >> subs/spiderman-debug.txt 2>&1; then
+                srt=$(find /tmp/subdl_out -iname '*.srt' | head -1)
+                if [ -n "$srt" ] && grep -q -- '-->' "$srt"; then
+                  cp "$srt" subs/spiderman.ru.srt
+                  echo "source: subdl (native Russian upload): $dl" > subs/spiderman.source.txt
+                  found="yes"
+                fi
               fi
             fi
-          done
+          else
+            echo "subdl fetch failed" >> subs/spiderman-debug.txt
+          fi
 
+          # --- 2) SubSource: native Russian ---
           if [ -z "$found" ]; then
-            echo "No Russian srt found on subtitlecat; trying subsource API" >> subs/debug-links.txt
-            curl -sL --max-time 60 -A "$UA" -X POST "https://api.subsource.net/api/searchMovie" \
-              -H "Content-Type: application/json" \
-              -d '{"query":"the odyssey 2026"}' -o subs/subsource-search.json || true
+            curl -sL --max-time 60 -A "$UA" "https://subsource.net/subtitles/spider-man-brand-new-day-2026/russian" -o /tmp/subsource.html || true
+            echo "== subsource bytes: $(wc -c < /tmp/subsource.html 2>/dev/null || echo 0)" >> subs/spiderman-debug.txt
+            grep -oE 'href="[^"]*russian[^"]*"' /tmp/subsource.html | head -10 >> subs/spiderman-debug.txt || true
+          fi
+
+          # --- 3) subtitlecat fallback (auto-translated, proven to work) ---
+          if [ -z "$found" ]; then
+            for page in \
+              "https://www.subtitlecat.com/subs/1612/Spider-Man.Brand.New.Day.2026.1080p.CAM.H264-OnlyFlix.html" \
+              "https://www.subtitlecat.com/subs/1612/Spider-Man.Brand.New.Day.2026.html"
+            do
+              curl -sL --max-time 60 -A "$UA" "$page" -o /tmp/cat.html || continue
+              grep -oE 'href="[^"]+\.srt"' /tmp/cat.html | sort -u >> subs/spiderman-debug.txt || true
+              ru=$(grep -oE 'href="[^"]+[-._]ru\.srt"' /tmp/cat.html | head -1 | sed 's/^href="//;s/"$//')
+              if [ -n "$ru" ]; then
+                case "$ru" in
+                  http*) url="$ru" ;;
+                  /*)    url="https://www.subtitlecat.com$ru" ;;
+                  *)     url="$(dirname "$page")/$ru" ;;
+                esac
+                curl -sL --max-time 60 -A "$UA" "$url" -o subs/spiderman.ru.srt
+                if grep -q -- '-->' subs/spiderman.ru.srt; then
+                  echo "source: subtitlecat (machine translated): $url" > subs/spiderman.source.txt
+                  found="yes"
+                  break
+                fi
+              fi
+            done
           fi
 
           ls -la subs/
