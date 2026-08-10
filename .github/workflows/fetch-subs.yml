@@ -17,11 +17,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Fetch Russian subtitles for Spider-Man Brand New Day (2026)
+      - name: Fetch English source subtitles for Spider-Man Brand New Day (2026)
         run: |
           set -x
           mkdir -p subs
           UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
+          for url in \
+            "https://www.subtitlecat.com/subs/1614/Spider-Man.Brand.New.Day.2026.1080p.CAM.H264-OnlyFlix-en.srt" \
+            "https://www.subtitlecat.com/subs/1612/Spider-Man.Brand.New.Day.2026.1080p.CAM.H264-OnlyFlix-en.srt"
+          do
+            curl -sL --max-time 60 -A "$UA" "$url" -o subs/spiderman.en.srt
+            if grep -q -- '-->' subs/spiderman.en.srt; then
+              echo "english source: $url" >> subs/spiderman.source.txt
+              break
+            fi
+          done
           : > subs/spiderman-debug.txt
           found=""
 
