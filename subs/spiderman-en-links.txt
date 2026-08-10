@@ -1,6 +1,3 @@
-== subdl russian page fetched, bytes: 171604
-== subsource bytes: 72696
-href="https://subsource.net/subtitles/spider-man-brand-new-day-2026/russian"
 href="/subs/1612/Spider-Man.Brand.New.Day.2026.1080p.CAM.H264-OnlyFlix-ar.srt"
 href="/subs/1612/Spider-Man.Brand.New.Day.2026.1080p.CAM.H264-OnlyFlix-bg.srt"
 href="/subs/1612/Spider-Man.Brand.New.Day.2026.1080p.CAM.H264-OnlyFlix-cs.srt"
